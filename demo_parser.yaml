@@ -1,0 +1,76 @@
+---
+- name: DEMO COMMAND PARSER PART2
+  hosts: cisco
+  connection: network_cli
+  gather_facts: no
+  tags: part2
+
+  roles:
+    - ansible-network.network-engine
+
+  tasks:
+
+    - name: COLLECT SHOW COMMAND OUTPUT
+      ios_command:
+        commands:
+          - show interfaces
+      register: output
+
+    - name: PARSE THE OUTPUT
+      command_parser:
+        file: parsers/show_interfaces.yaml
+        content: "{{ output.stdout[0] }}"
+
+    #- name: DISPLAY THE PARSED OUTPUT
+    #  debug:
+    #    var: section
+
+    #- name: DISPLAY THE PARSED OUTPUT
+    #  debug:
+    #    var: interfaces
+    - name: DISPLAY THE PARSED OUTPUT
+      debug:
+        var: interface_facts
+
+
+- name: DEMO THE EXTEND DIRECTIVE
+  hosts: rtr1
+  connection: network_cli
+  gather_facts: no
+  tags: demo_extend
+
+  vars:
+    parser_files:
+      - show_ip_interfaces.yaml
+      - show_interfaces.yaml
+
+  roles:
+     - ansible-network.network-engine
+
+  tasks:
+    - name: COLLECT THE SHOW COMMAND OUTPUT
+      ios_command:
+        commands:
+          - show ip interface brief
+          - show interfaces
+      register: output
+
+    #- debug:
+    #    msg: "{{ item.0 }} and {{ item.1 }}"
+    #  loop: "{{ parser_files | zip(output.stdout) | list }}"
+
+    - name: MAP THE OUTPUT WITH THE PARSER FILE
+      set_fact:
+        output_parser: "{{ output_parser | default([]) |union([{ 'parser': item.0, 'output': item.1 }]) }}"
+      loop: "{{ parser_files | zip(output.stdout) | list }}"
+
+    - name: GENERATE STRUCTURED TEXT
+      command_parser:
+        file: "./parsers/{{ item.parser }}"
+        content: "{{ item.output }}"
+      loop: "{{ output_parser }}"
+
+    - name: DISPLAY THE GENERATED FACT
+      debug:
+        var=ios_interface_facts
+     

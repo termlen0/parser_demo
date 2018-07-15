@@ -1,0 +1,62 @@
+---
+- name: parser meta data
+  parser_metadata:
+    version: 1.0
+    command: show interface
+    network_os: ios
+
+- name: match sections
+  pattern_match:
+    regex: "^(\\S+) is.*(?:up|down),"
+    match_greedy: yes
+    match_all: yes
+  register: section
+
+- name: match interface values
+  pattern_group:
+    - name: match name
+      pattern_match:
+        regex: "^(\\S+)"
+        content: "{{ item }}"
+      register: name
+
+    - name: match mtu
+      pattern_match:
+        regex: "MTU (\\d+)"
+        content: "{{ item }}"
+      register: mtu
+
+    - name: match txload
+      pattern_match:
+        regex: "reliability.*txload\\s(\\S+),.*"
+        content: "{{ item }}"
+      register: txload
+
+    - name: match rxload
+      pattern_match:
+        regex: "reliability.*rxload\\s(\\S+)"
+        content: "{{ item }}"
+      register: rxload
+  loop: "{{ section }}"
+  register: interfaces
+
+- name: generate json data structure
+  json_template:
+    template:
+      - key: "{{ item.name.matches.0 }}"
+        object:
+        - key: config
+          object:
+            - key: name
+              value: "{{ item.name.matches.0 }}"
+            - key: mtu
+              value: "{{ item.mtu.matches.0 }}"
+            - key: rxload
+              value: "{{ item.rxload.matches.0 }}"
+            - key: txload
+              value: "{{ item.txload.matches.0 }}"
+  loop: "{{ interfaces }}"
+  export: yes
+  #export_as: dict
+  #extend: ios_interface_facts
+  register: interface_facts
